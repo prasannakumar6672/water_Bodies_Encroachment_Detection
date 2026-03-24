@@ -1,8 +1,8 @@
-import React, { useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import GlassmorphicCard from '../common/GlassmorphicCard';
-import { CheckCircle, XCircle, FileText, Mail, User, MapPin, Building, ChevronDown, ChevronUp, Clock } from 'lucide-react';
+import { CheckCircle, XCircle, FileText, Mail, User, MapPin, Building, ChevronDown, ChevronUp, Clock, Loader2 } from 'lucide-react';
 import AnimatedButton from '../common/AnimatedButton';
+import { adminAPI } from '../../services/api';
+import { useEffect } from 'react';
+
 
 const ApprovalCard = ({ officer, onApprove, onReject }) => {
     const [expanded, setExpanded] = useState(false);
@@ -114,38 +114,60 @@ const ApprovalCard = ({ officer, onApprove, onReject }) => {
 };
 
 export default function OfficerApprovalQueue() {
-    // Mock Data
-    const [officers, setOfficers] = useState([
-        {
-            id: 156,
-            name: 'Mr. Suresh Reddy',
-            email: 'suresh.reddy@revenue.gov.in',
-            dept: 'Revenue Department',
-            designation: 'Assistant District Officer',
-            region: 'Nalgonda District',
-            appliedDate: 'Jan 25, 2026',
-            documents: ['Aadhaar_Suresh.pdf', 'Posting_Order.pdf', 'Dept_Letter.pdf']
-        },
-        {
-            id: 157,
-            name: 'Ms. Priya Sharma',
-            email: 'priya.s@environment.gov.in',
-            dept: 'Env. Protection Agency',
-            designation: 'Field Inspector',
-            region: 'Hyderabad District',
-            appliedDate: 'Jan 26, 2026',
-            documents: ['ID_Card.pdf', 'Authorization.pdf']
-        }
-    ]);
+    const [officers, setOfficers] = useState([]);
+    const [isLoading, setIsLoading] = useState(false);
 
-    const handleApprove = (id) => {
-        setOfficers(officers.filter(o => o.id !== id));
-        alert(`Officer #${id} Approved! Credentials sent.`);
+    useEffect(() => {
+        fetchOfficers();
+    }, []);
+
+    const fetchOfficers = async () => {
+        setIsLoading(true);
+        try {
+            const { data } = await adminAPI.approvals();
+            const mapped = data.map(o => ({
+
+                id: o.id,
+                name: o.full_name,
+                email: o.email,
+                dept: o.department,
+                designation: o.designation,
+                region: o.region,
+                appliedDate: new Date(o.created_at).toLocaleDateString(),
+                documents: o.identity_proof_url ? [o.identity_proof_url.split('/').pop()] : []
+            }));
+            setOfficers(mapped);
+        } catch (err) {
+            console.error("Error fetching officer registrations:", err);
+        } finally {
+            setIsLoading(false);
+        }
     };
 
-    const handleReject = (id) => {
-        setOfficers(officers.filter(o => o.id !== id));
-        alert(`Officer #${id} Rejected.`);
+    const handleApprove = async (id) => {
+        setIsLoading(true);
+        try {
+            await adminAPI.approveOfficer(id);
+            alert(`Officer #${id} Approved!`);
+            fetchOfficers();
+        } catch (err) {
+            alert("Error approving officer.");
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    const handleReject = async (id) => {
+        setIsLoading(true);
+        try {
+            await adminAPI.rejectOfficer(id);
+            alert(`Officer #${id} Rejected.`);
+            fetchOfficers();
+        } catch (err) {
+            alert("Error rejecting officer.");
+        } finally {
+            setIsLoading(false);
+        }
     };
 
     return (
@@ -156,9 +178,13 @@ export default function OfficerApprovalQueue() {
             </h3>
 
             <div className="flex-1 overflow-y-auto custom-scrollbar pr-2">
-                {officers.length > 0 ? (
+                {isLoading ? (
+                    <div className="flex justify-center p-12">
+                        <Loader2 className="animate-spin text-amber-400" size={32} />
+                    </div>
+                ) : officers.length > 0 ? (
                     officers.map(officer => (
-                        <div key={officer.id} onClick={() => { }} > {/* Wrapper for click handling if needed later */}
+                        <div key={officer.id}>
                             <ApprovalCard
                                 officer={officer}
                                 onApprove={handleApprove}

@@ -1,49 +1,77 @@
-import React, { useState } from 'react';
-import GlassmorphicCard from '../common/GlassmorphicCard';
-import ComplaintCard from './ComplaintCard';
-import { X, Send, Menu } from 'lucide-react';
+import { X, Send, Menu, Loader2 } from 'lucide-react';
 import AnimatedButton from '../common/AnimatedButton';
 import { motion, AnimatePresence } from 'framer-motion';
+import { complaintsAPI, verificationsAPI } from '../../services/api';
+import { useEffect, useState } from 'react';
+
 
 export default function ComplaintManagement() {
+    const [complaints, setComplaints] = useState([]);
+    const [isLoading, setIsLoading] = useState(false);
     const [selectedComplaint, setSelectedComplaint] = useState(null);
     const [responseTemplate, setResponseTemplate] = useState('Standard Acknowledgment');
+    const [responseMessage, setResponseMessage] = useState('');
+    const [updateStatus, setUpdateStatus] = useState(true);
 
-    // Mock Data
-    const complaints = [
-        {
-            id: '1247',
-            lakeName: 'Hussain Sagar',
-            filedBy: 'Ramesh Kumar',
-            date: 'Jan 27, 2026',
-            priority: 'HIGH',
-            issue: 'Construction activity detected near the east boundary buffer zone.',
-            photosCount: 3,
-            status: 'Pending',
-            image: null // Placeholder
-        },
-        {
-            id: '1248',
-            lakeName: 'Kapra Lake',
-            filedBy: 'Anonymous',
-            date: 'Jan 26, 2026',
-            priority: 'MEDIUM',
-            issue: 'Sewage inlet overflow reported during recent rains.',
-            photosCount: 1,
-            status: 'Pending',
-            image: null
+    useEffect(() => {
+        fetchComplaints();
+    }, []);
+
+    const fetchComplaints = async () => {
+        setIsLoading(true);
+        try {
+            const { data } = await complaintsAPI.list();
+            // Map backend data to frontend structure
+            const mapped = data.map(c => ({
+                id: c.id,
+                lakeName: c.lake?.name || 'Unknown Lake',
+                filedBy: c.reporter_name || 'Anonymous',
+                date: new Date(c.created_at).toLocaleDateString(),
+                priority: c.priority.toUpperCase(),
+                issue: c.description,
+                photos_count: c.photos_count || 0,
+                status: c.status,
+                photos: c.photos || []
+            }));
+            setComplaints(mapped);
+        } catch (err) {
+            console.error("Error fetching complaints:", err);
+        } finally {
+            setIsLoading(false);
         }
-    ];
+    };
 
     const handleRespond = (complaint) => {
         setSelectedComplaint(complaint);
+        setResponseMessage(`Dear ${complaint.filedBy},
+
+Thank you for bringing this matter to our attention regarding ${complaint.lakeName}. We have reviewed the details provided in Complaint #${complaint.id}.
+
+Our team has initiated a preliminary assessment of the reported ${complaint.issue.toLowerCase()}.
+
+You will receive further updates within 48 hours.
+
+Regards,
+District Officer
+Hyderabad Region`);
     };
 
-    const handleSendResponse = (e) => {
+    const handleSendResponse = async (e) => {
         e.preventDefault();
-        // Here you would implement the actual email sending logic
-        alert(`Response sent for Complaint #${selectedComplaint.id}`);
-        setSelectedComplaint(null);
+        setIsLoading(true);
+        try {
+            await complaintsAPI.respond(selectedComplaint.id, {
+                message: responseMessage,
+                update_status: updateStatus ? "Under Review" : null
+            });
+            alert(`Response sent for Complaint #${selectedComplaint.id}`);
+            setSelectedComplaint(null);
+            fetchComplaints();
+        } catch (err) {
+            alert("Error sending response. Please try again.");
+        } finally {
+            setIsLoading(false);
+        }
     };
 
     return (
@@ -60,13 +88,21 @@ export default function ComplaintManagement() {
             </div>
 
             <div className="space-y-4 pb-20">
-                {complaints.map(complaint => (
-                    <ComplaintCard
-                        key={complaint.id}
-                        complaint={complaint}
-                        onRespond={handleRespond}
-                    />
-                ))}
+                {isLoading ? (
+                    <div className="flex justify-center p-12">
+                        <Loader2 className="animate-spin text-cyan-400" size={32} />
+                    </div>
+                ) : complaints.length === 0 ? (
+                    <div className="text-center p-12 text-gray-400">No complaints found.</div>
+                ) : (
+                    complaints.map(complaint => (
+                        <ComplaintCard
+                            key={complaint.id}
+                            complaint={complaint}
+                            onRespond={handleRespond}
+                        />
+                    ))
+                )}
             </div>
 
             {/* Response Modal */}
@@ -120,24 +156,20 @@ export default function ComplaintManagement() {
                                         <textarea
                                             rows="8"
                                             className="w-full bg-slate-800 border border-white/10 rounded-lg p-4 text-sm text-white resize-none focus:border-cyan-400 outline-none leading-relaxed"
-                                            defaultValue={`Dear ${selectedComplaint.filedBy},
-
-Thank you for bringing this matter to our attention regarding ${selectedComplaint.lakeName}. We have reviewed the details provided in Complaint #${selectedComplaint.id}.
-
-Our team has initiated a preliminary assessment of the reported ${selectedComplaint.issue.toLowerCase()}
-
-You will receive further updates within 48 hours.
-
-Regards,
-District Officer
-Hyderabad Region`}
+                                            value={responseMessage}
+                                            onChange={(e) => setResponseMessage(e.target.value)}
                                         />
                                     </div>
 
                                     <div className="flex items-center justify-between pt-4 border-t border-white/10">
                                         <div className="flex gap-4">
                                             <label className="flex items-center gap-2 text-xs text-gray-400 cursor-pointer">
-                                                <input type="checkbox" defaultChecked className="rounded border-white/20 bg-white/5 text-cyan-400" />
+                                                <input 
+                                                    type="checkbox" 
+                                                    checked={updateStatus} 
+                                                    onChange={(e) => setUpdateStatus(e.target.checked)}
+                                                    className="rounded border-white/20 bg-white/5 text-cyan-400" 
+                                                />
                                                 Update Status to "Under Review"
                                             </label>
                                             <label className="flex items-center gap-2 text-xs text-gray-400 cursor-pointer">

@@ -1,8 +1,8 @@
-import React from 'react';
-import { Users, Shield, Clock, Waves, AlertTriangle, Activity } from 'lucide-react';
-import GlassmorphicCard from '../common/GlassmorphicCard';
+import { adminAPI } from '../../services/api';
+import { useState, useEffect } from 'react';
 
 const MetricCard = ({ label, value, icon: Icon, color, trend }) => (
+
     <GlassmorphicCard className="p-4 flex items-center gap-4 relative overflow-hidden group">
         {/* Background Glow */}
         <div className={`absolute -right-4 -bottom-4 w-20 h-20 rounded-full opacity-10 transition-transform group-hover:scale-150 duration-500`} style={{ backgroundColor: color }} />
@@ -23,6 +23,27 @@ const MetricCard = ({ label, value, icon: Icon, color, trend }) => (
 );
 
 export default function SystemMetrics() {
+    const [metrics, setMetrics] = useState(null);
+    const [isLoading, setIsLoading] = useState(false);
+
+    useEffect(() => {
+        const fetchMetrics = async () => {
+            setIsLoading(true);
+            try {
+                const { data } = await adminAPI.metrics();
+                setMetrics(data);
+            } catch (err) {
+                console.error("Error fetching metrics:", err);
+            } finally {
+                setIsLoading(false);
+            }
+        };
+        fetchMetrics();
+    }, []);
+
+
+    if (!metrics && isLoading) return <div className="p-8 text-center text-gray-400">Loading metrics...</div>;
+
     return (
         <div className="space-y-6">
             <h3 className="text-lg font-bold text-white flex items-center gap-2">
@@ -32,41 +53,40 @@ export default function SystemMetrics() {
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
                 <MetricCard
                     label="Total Users"
-                    value="12,547"
+                    value={metrics?.total_users || 0}
                     icon={Users}
                     color="#06b6d4"
-                    trend="+12%"
                 />
                 <MetricCard
                     label="Active Officers"
-                    value="156"
+                    value={metrics?.active_officers || 0}
                     icon={Shield}
                     color="#8b5cf6"
                 />
                 <MetricCard
                     label="Pending Approvals"
-                    value="8"
+                    value={metrics?.pending_approvals || 0}
                     icon={Clock}
                     color="#f59e0b"
                 />
                 <MetricCard
                     label="Lakes Monitored"
-                    value="2,547"
+                    value={metrics?.lakes_monitored || 0}
                     icon={Waves}
                     color="#3b82f6"
                 />
                 <MetricCard
                     label="Active Alerts"
-                    value="47"
+                    value={metrics?.active_alerts || 0}
                     icon={AlertTriangle}
                     color="#ef4444"
                 />
                 <div className="bg-green-500/10 border border-green-500/20 rounded-xl p-4 flex flex-col justify-center items-center text-center">
                     <p className="text-xs text-green-300 font-bold uppercase mb-1">System Health</p>
                     <div className="flex gap-1 mb-1">
-                        {[1, 2, 3, 4, 5].map(i => <div key={i} className="w-2 h-2 rounded-full bg-green-500" />)}
+                        {[1, 2, 3, 4, 5].map(i => <div key={i} className={`w-2 h-2 rounded-full ${metrics?.system_health >= i*20 ? 'bg-green-500' : 'bg-green-900'}`} />)}
                     </div>
-                    <p className="text-xl font-bold text-white">98%</p>
+                    <p className="text-xl font-bold text-white">{metrics?.system_health || 98}%</p>
                 </div>
             </div>
         </div>

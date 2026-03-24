@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useLocation } from 'react-router-dom';
 import Navbar from '../../components/layout/Navbar';
@@ -22,6 +22,9 @@ import {
     Legend
 } from 'chart.js';
 
+import { lakesAPI, observationsAPI } from '../../services/api';
+import { DASHBOARD_YEARS, DASHBOARD_AREA_DATA, DASHBOARD_CHANGE_ZONES, DASHBOARD_CHART_OPTIONS } from '../../utils/constants';
+
 // Register ChartJS components
 ChartJS.register(
     CategoryScale,
@@ -30,18 +33,8 @@ ChartJS.register(
     LineElement,
     Title,
     Tooltip,
-    Title,
-    Tooltip,
     Legend
 );
-
-import satellite2019 from '../../assets/dashboard/satellite_2019.png';
-import satellite2024 from '../../assets/dashboard/satellite_2024.png';
-import changeMap from '../../assets/dashboard/change_map.png';
-import { districts } from '../../data/districts';
-import { mandals } from '../../data/mandals';
-import { lakes } from '../../data/lakes';
-import { DASHBOARD_YEARS, DASHBOARD_AREA_DATA, DASHBOARD_CHANGE_ZONES, DASHBOARD_CHART_OPTIONS } from '../../utils/constants';
 
 export default function UserDashboard() {
     const { user } = useAuth();
@@ -53,42 +46,38 @@ export default function UserDashboard() {
     const [selectedLake, setSelectedLake] = useState('');
     const [showAnalysis, setShowAnalysis] = useState(false);
 
-    // Overlay toggles
-    const [showChangeRegion, setShowChangeRegion] = useState(true);
-    const [showWaterBoundary, setShowWaterBoundary] = useState(true);
-    const [showBufferZone, setShowBufferZone] = useState(false);
+    // API Data
+    const [allLakes, setAllLakes] = useState([]);
+    const [lakeDetails, setLakeDetails] = useState(null);
+    const [myObservations, setMyObservations] = useState([]);
+    const [isLoading, setIsLoading] = useState(false);
 
-    // Timeline state
-    const [selectedYear, setSelectedYear] = useState(2024);
-    const [isPlaying, setIsPlaying] = useState(false);
 
-    // Form states
-    const [showObservationForm, setShowObservationForm] = useState(false);
-    const [showSuggestionForm, setShowSuggestionForm] = useState(false);
+    const filteredMandals = allLakes
+        .filter(l => !selectedDistrict || l.district === selectedDistrict)
+        .map(l => l.mandal)
+        .filter((v, i, a) => a.indexOf(v) === i);
 
-    // Observation form
-    const [observationForm, setObservationForm] = useState({
-        concernType: '',
-        description: '',
-        photos: [],
-        location: '',
-        priority: 'Medium',
-        emailUpdates: true,
-        smsAlerts: false
-    });
+    const filteredLakes = allLakes
+        .filter(l => (!selectedDistrict || l.district === selectedDistrict) && (!selectedMandal || l.mandal === selectedMandal));
 
-    // Suggestion form
-    const [suggestionForm, setSuggestionForm] = useState({
-        category: '',
-        suggestion: '',
-        images: [],
-        budget: '',
-        timeline: '',
-        volunteer: false,
-        makePublic: false
-    });
+    // Initial fetch
+    useEffect(() => {
+        const fetchData = async () => {
+            try {
+                const [lakesRes, obsRes] = await Promise.all([
+                    lakesAPI.list(),
+                    observationsAPI.getMy()
+                ]);
+                setAllLakes(lakesRes.data);
+                setMyObservations(obsRes.data);
+            } catch (err) {
+                console.error("Error fetching dashboard data:", err);
+            }
+        };
+        fetchData();
+    }, []);
 
-    // Sample data
 
 
     const years = DASHBOARD_YEARS;
@@ -118,10 +107,23 @@ export default function UserDashboard() {
 
     const changeZones = DASHBOARD_CHANGE_ZONES;
 
-    const handleAnalyzeLake = () => {
-        if (selectedDistrict && selectedLake) {
-            setShowAnalysis(true);
-            window.scrollTo({ top: 600, behavior: 'smooth' });
+    const handleAnalyzeLake = async () => {
+        if (selectedLake) {
+            setIsLoading(true);
+            try {
+                const { data } = await lakesAPI.get(selectedLake);
+                setLakeDetails(data);
+                setShowAnalysis(true);
+                // Scroll to analysis
+                setTimeout(() => {
+                    const el = document.getElementById('lake-analysis-section');
+                    if (el) el.scrollIntoView({ behavior: 'smooth' });
+                }, 100);
+            } catch (err) {
+                alert("Error fetching lake analysis. Please try again.");
+            } finally {
+                setIsLoading(false);
+            }
         }
     };
 
@@ -139,20 +141,59 @@ export default function UserDashboard() {
         }, 1000);
     };
 
-    const handleSubmitObservation = (e) => {
+    const fileInputRef = useRef(null);
+
+    const handleFileClick = () => {
+        fileInputRef.current?.click();
+    };
+
+    const handleFileChange = (e) => {
+        const files = Array.from(e.target.files);
+        if (files.length > 5) {
+            alert("You can upload up to 5 images only.");
+            return;
+        }
+        setObservationForm(prev => ({ ...prev, photos: files }));
+    };
+
+    const handleSubmitObservation = async (e) => {
         e.preventDefault();
-        console.log('Observation submitted:', observationForm);
-        alert('Your observation has been submitted for review. You will receive updates via email.');
-        setShowObservationForm(false);
-        setObservationForm({
-            concernType: '',
-            description: '',
-            photos: [],
-            location: '',
-            priority: 'Medium',
-            emailUpdates: true,
-            smsAlerts: false
-        });
+        setIsLoading(true);
+        try {
+            const formData = new FormData();
+            formData.append('lake_id', selectedLake);
+            formData.append('concern_type', observationForm.concernType);
+            formData.append('description', observationForm.description);
+            formData.append('priority', observationForm.priority);
+            formData.append('location_note', observationForm.location);
+            formData.append('email_updates', observationForm.emailUpdates);
+            formData.append('sms_alerts', observationForm.smsAlerts);
+            observationForm.photos.forEach(file => {
+                formData.append('photos', file);
+            });
+
+            const { data } = await observationsAPI.submit(formData);
+            alert(data.message + " Ref: " + data.reference_id);
+            setShowObservationForm(false);
+            
+            // Refresh observations
+            const res = await observationsAPI.getMy();
+            setMyObservations(res.data);
+
+            setObservationForm({
+                concernType: '',
+                description: '',
+                photos: [],
+                location: '',
+                priority: 'Medium',
+                emailUpdates: true,
+                smsAlerts: false
+            });
+        } catch (err) {
+            alert("Error submitting observation. Please try again.");
+        } finally {
+            setIsLoading(false);
+        }
     };
 
     const handleSubmitSuggestion = (e) => {
@@ -219,9 +260,9 @@ export default function UserDashboard() {
                             <div className="flex items-start gap-4">
                                 <div className="text-4xl">🏞️</div>
                                 <div className="flex-1">
-                                    <div className="text-3xl font-display font-bold text-white mb-1">45</div>
-                                    <div className="text-sm font-medium text-text-primary mb-1">Lakes in Your District</div>
-                                    <div className="text-xs text-text-muted">Hyderabad region</div>
+                                    <div className="text-3xl font-display font-bold text-white mb-1">{allLakes.length}</div>
+                                    <div className="text-sm font-medium text-text-primary mb-1">Lakes Monitored</div>
+                                    <div className="text-xs text-text-muted">In your selected region</div>
                                 </div>
                             </div>
                         </GlassmorphicCard>
@@ -236,11 +277,11 @@ export default function UserDashboard() {
                             <div className="flex items-start gap-4">
                                 <div className="text-4xl">📝</div>
                                 <div className="flex-1">
-                                    <div className="text-3xl font-display font-bold text-white mb-1">2</div>
+                                    <div className="text-3xl font-display font-bold text-white mb-1">{myObservations.length}</div>
                                     <div className="text-sm font-medium text-text-primary mb-1">Your Observations</div>
                                     <div className="mt-1">
                                         <span className="inline-block px-2 py-0.5 rounded-full text-[10px] uppercase font-bold tracking-wider bg-cyan-400/10 text-cyan-400 border border-cyan-400/20">
-                                            1 Reviewed
+                                            {myObservations.filter(o => o.status !== 'Submitted').length} Reviewed
                                         </span>
                                     </div>
                                 </div>
@@ -297,7 +338,7 @@ export default function UserDashboard() {
                                             className="w-full bg-slate-900/50 border border-white/10 rounded-lg px-4 py-3 text-sm text-white outline-none focus:border-cyan-400 transition-colors [&>option]:bg-slate-900 [&>option]:text-white"
                                         >
                                             <option value="" className="bg-slate-900 text-gray-400">Select District</option>
-                                            {districts.map(district => (
+                                            {[...new Set(allLakes.map(l => l.district))].map(district => (
                                                 <option key={district} value={district} className="bg-slate-900 text-white">{district}</option>
                                             ))}
                                         </select>
@@ -317,7 +358,7 @@ export default function UserDashboard() {
                                             className="w-full bg-slate-900/50 border border-white/10 rounded-lg px-4 py-3 text-sm text-white outline-none focus:border-cyan-400 transition-colors disabled:opacity-50 [&>option]:bg-slate-900 [&>option]:text-white"
                                         >
                                             <option value="" className="bg-slate-900 text-gray-400">Select Mandal</option>
-                                            {selectedDistrict && mandals[selectedDistrict]?.map(mandal => (
+                                            {filteredMandals.map(mandal => (
                                                 <option key={mandal} value={mandal} className="bg-slate-900 text-white">{mandal}</option>
                                             ))}
                                         </select>
@@ -334,8 +375,8 @@ export default function UserDashboard() {
                                             className="w-full bg-slate-900/50 border border-white/10 rounded-lg px-4 py-3 text-sm text-white outline-none focus:border-cyan-400 transition-colors disabled:opacity-50 [&>option]:bg-slate-900 [&>option]:text-white"
                                         >
                                             <option value="" className="bg-slate-900 text-gray-400">Select Lake</option>
-                                            {selectedMandal && lakes[selectedMandal]?.map(lake => (
-                                                <option key={lake} value={lake} className="bg-slate-900 text-white">{lake}</option>
+                                            {filteredLakes.map(lake => (
+                                                <option key={lake.id} value={lake.id} className="bg-slate-900 text-white">{lake.name}</option>
                                             ))}
                                         </select>
                                     </div>
@@ -377,35 +418,42 @@ export default function UserDashboard() {
                                     <div className="space-y-3">
                                         <div className="flex items-center gap-3">
                                             <span className="text-2xl">🏞️</span>
-                                            <span className="text-xl font-bold">Hussain Sagar Lake</span>
+                                            <span className="text-xl font-bold">{lakeDetails?.name || 'Lake Analysis'}</span>
                                         </div>
                                         <div className="flex items-center gap-2 text-text-secondary">
                                             <MapPin size={16} />
-                                            <span>Hyderabad, Telangana</span>
+                                            <span>{lakeDetails?.district}, {lakeDetails?.mandal}</span>
                                         </div>
                                         <div className="flex items-center gap-2 text-text-secondary text-sm">
                                             <Clock size={14} />
-                                            <span>Last Updated: 2 days ago</span>
+                                            <span>Last Scanned: {lakeDetails?.last_scanned || 'Never'}</span>
                                         </div>
                                     </div>
 
                                     <div className="space-y-2 text-sm">
                                         <div className="flex justify-between">
-                                            <span className="text-text-secondary">📏 Original Area:</span>
-                                            <span className="font-bold text-white">545 hectares</span>
+                                            <span className="text-text-secondary">📏 Baseline Area ({lakeDetails?.baseline_year}):</span>
+                                            <span className="font-bold text-white">{lakeDetails?.baseline_area_ha} hectares</span>
                                         </div>
                                         <div className="flex justify-between">
                                             <span className="text-text-secondary">📏 Current Area:</span>
-                                            <span className="font-bold text-white">498 hectares</span>
+                                            <span className="font-bold text-white">{lakeDetails?.current_area_ha} hectares</span>
                                         </div>
                                         <div className="flex justify-between">
                                             <span className="text-text-secondary">📉 Observed Area Change:</span>
-                                            <span className="font-bold text-red-400">~47 hectares (8.6%)</span>
+                                            <span className={`font-bold ${lakeDetails?.change_pct > 5 ? 'text-red-400' : 'text-green-400'}`}>
+                                                ~{lakeDetails?.area_change_ha} hectares ({lakeDetails?.change_pct}%)
+                                            </span>
                                         </div>
                                         <div className="flex justify-between items-center">
-                                            <span className="text-text-secondary">⚠️ Change Indicator:</span>
-                                            <span className="px-3 py-1 bg-amber-500/20 text-amber-400 rounded-full text-xs font-bold">
-                                                MEDIUM (Analytical)
+                                            <span className="text-text-secondary">⚠️ Alert Level:</span>
+                                            <span className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${
+                                                lakeDetails?.alert_level === 'Critical' ? 'bg-red-500/20 text-red-500' :
+                                                lakeDetails?.alert_level === 'High' ? 'bg-orange-500/20 text-orange-500' :
+                                                lakeDetails?.alert_level === 'Moderate' ? 'bg-yellow-500/20 text-yellow-500' :
+                                                'bg-green-500/20 text-green-500'
+                                            }`}>
+                                                {lakeDetails?.alert_level || 'Stable'}
                                             </span>
                                         </div>
                                     </div>
@@ -432,8 +480,8 @@ export default function UserDashboard() {
                                         </div>
                                         <div className="aspect-video bg-black rounded-lg border border-white/10 overflow-hidden relative group">
                                             <img
-                                                src={satellite2019}
-                                                alt="Satellite View 2019"
+                                                src={lakeDetails?.baseline_image_url || satellite2019}
+                                                alt="Satellite View Baseline"
                                                 className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
                                             />
                                             <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent opacity-60"></div>
@@ -451,8 +499,8 @@ export default function UserDashboard() {
                                         </div>
                                         <div className="aspect-video bg-black rounded-lg border border-white/10 overflow-hidden relative group">
                                             <img
-                                                src={satellite2024}
-                                                alt="Satellite View 2024"
+                                                src={lakeDetails?.scan_history?.[0]?.new_img_url || satellite2024}
+                                                alt="Satellite View Current"
                                                 className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
                                             />
                                             <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent opacity-60"></div>
@@ -798,9 +846,25 @@ export default function UserDashboard() {
 
                                         <div>
                                             <label className="block text-sm font-medium mb-2 text-text-secondary">Upload Photos (Optional)</label>
-                                            <div className="border-2 border-dashed border-white/10 rounded-lg p-6 text-center hover:border-cyan-400/50 transition-colors cursor-pointer">
-                                                <Upload className="mx-auto mb-2 text-text-muted" size={24} />
-                                                <p className="text-sm text-text-muted">Click to upload up to 5 images</p>
+                                            <input
+                                                type="file"
+                                                ref={fileInputRef}
+                                                onChange={handleFileChange}
+                                                multiple
+                                                accept="image/*"
+                                                className="hidden"
+                                            />
+                                            <div 
+                                                onClick={handleFileClick}
+                                                className="border-2 border-dashed border-white/10 rounded-lg p-6 text-center hover:border-cyan-400/50 transition-colors cursor-pointer group"
+                                            >
+                                                <Upload className="mx-auto mb-2 text-text-muted group-hover:text-cyan-400 transition-colors" size={24} />
+                                                <p className="text-sm text-text-muted group-hover:text-text-primary transition-colors">
+                                                    {observationForm.photos.length > 0 
+                                                        ? `${observationForm.photos.length} files selected` 
+                                                        : 'Click to upload up to 5 images'
+                                                    }
+                                                </p>
                                             </div>
                                         </div>
 

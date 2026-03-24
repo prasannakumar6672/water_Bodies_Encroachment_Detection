@@ -1,7 +1,8 @@
-import React from 'react';
-import GlassmorphicCard from '../common/GlassmorphicCard';
-import { Calendar, Users, ClipboardCheck, Clock, MapPin, ChevronRight, Plus } from 'lucide-react';
+import { Calendar, Users, ClipboardCheck, Clock, MapPin, ChevronRight, Plus, Loader2 } from 'lucide-react';
 import AnimatedButton from '../common/AnimatedButton';
+import { verificationsAPI } from '../../services/api';
+import { useState, useEffect } from 'react';
+
 
 const VerificationTask = ({ task }) => (
     <div className="flex items-center justify-between p-4 bg-white/5 border border-white/5 rounded-xl mb-3 hover:border-cyan-400/30 transition-all group">
@@ -39,32 +40,32 @@ const VerificationTask = ({ task }) => (
 );
 
 export default function FieldVerificationQueue() {
-    const tasks = [
-        {
-            id: 1,
-            lakeName: 'Saroornagar Lake',
-            date: 'Feb 1, 2026',
-            team: 'Field Team Alpha',
-            description: 'Survey needed for reported encroachment.',
-            status: 'Scheduled'
-        },
-        {
-            id: 2,
-            lakeName: 'Mir Alam Lake',
-            date: 'Feb 3, 2026',
-            team: 'Team Beta',
-            description: 'Boundary check verification.',
-            status: 'Pending'
-        },
-        {
-            id: 3,
-            lakeName: 'Hussain Sagar',
-            date: 'Jan 25, 2026',
-            team: 'Field Team Gamma',
-            description: 'Routine inspection completed.',
-            status: 'Completed'
-        }
-    ];
+    const [tasks, setTasks] = useState([]);
+    const [isLoading, setIsLoading] = useState(false);
+
+    useEffect(() => {
+        const fetchTasks = async () => {
+            setIsLoading(true);
+            try {
+                const { data } = await verificationsAPI.list();
+                const mapped = data.map(v => ({
+                    id: v.id,
+                    lakeName: v.lake?.name || 'Unknown Lake',
+                    date: new Date(v.scheduled_date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }),
+                    team: v.assigned_team || 'Unassigned',
+                    description: v.description,
+                    status: v.status
+                }));
+                setTasks(mapped);
+            } catch (err) {
+                console.error("Error fetching verification tasks:", err);
+            } finally {
+                setIsLoading(false);
+            }
+        };
+        fetchTasks();
+    }, []);
+
 
     return (
         <div className="h-full flex flex-col">
@@ -80,29 +81,45 @@ export default function FieldVerificationQueue() {
 
                 <div className="mb-6 flex gap-4">
                     <div className="flex-1 bg-orange-500/10 border border-orange-500/20 p-4 rounded-xl text-center">
-                        <h3 className="text-2xl font-bold text-orange-400">02</h3>
+                        <h3 className="text-2xl font-bold text-orange-400">
+                            {tasks.filter(t => t.status === 'Scheduled').length.toString().padStart(2, '0')}
+                        </h3>
                         <p className="text-xs text-gray-400 uppercase tracking-wider">Scheduled</p>
                     </div>
                     <div className="flex-1 bg-green-500/10 border border-green-500/20 p-4 rounded-xl text-center">
-                        <h3 className="text-2xl font-bold text-green-400">14</h3>
-                        <p className="text-xs text-gray-400 uppercase tracking-wider">Completed (Jan)</p>
+                        <h3 className="text-2xl font-bold text-green-400">
+                            {tasks.filter(t => t.status === 'Completed').length.toString().padStart(2, '0')}
+                        </h3>
+                        <p className="text-xs text-gray-400 uppercase tracking-wider">Completed</p>
                     </div>
                     <div className="flex-1 bg-blue-500/10 border border-blue-500/20 p-4 rounded-xl text-center">
-                        <h3 className="text-2xl font-bold text-blue-400">05</h3>
+                        <h3 className="text-2xl font-bold text-blue-400">
+                            {[...new Set(tasks.map(t => t.team))].length.toString().padStart(2, '0')}
+                        </h3>
                         <p className="text-xs text-gray-400 uppercase tracking-wider">Teams Active</p>
                     </div>
                 </div>
 
                 <div className="space-y-4">
-                    <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">Upcoming Tasks</h3>
-                    {tasks.filter(t => t.status !== 'Completed').map(task => (
-                        <VerificationTask key={task.id} task={task} />
-                    ))}
+                    {isLoading ? (
+                        <div className="flex justify-center p-12">
+                            <Loader2 className="animate-spin text-cyan-400" size={32} />
+                        </div>
+                    ) : tasks.length === 0 ? (
+                        <div className="text-center p-12 text-gray-400">No verification tasks found.</div>
+                    ) : (
+                        <>
+                            <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">Upcoming Tasks</h3>
+                            {tasks.filter(t => t.status !== 'Completed').map(task => (
+                                <VerificationTask key={task.id} task={task} />
+                            ))}
 
-                    <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3 mt-6">Completed History</h3>
-                    {tasks.filter(t => t.status === 'Completed').map(task => (
-                        <VerificationTask key={task.id} task={task} />
-                    ))}
+                            <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3 mt-6">Completed History</h3>
+                            {tasks.filter(t => t.status === 'Completed').map(task => (
+                                <VerificationTask key={task.id} task={task} />
+                            ))}
+                        </>
+                    )}
                 </div>
             </GlassmorphicCard>
         </div>

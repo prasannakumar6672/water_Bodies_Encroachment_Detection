@@ -1,15 +1,38 @@
-import React, { useState } from 'react';
-import { Search, Filter, MoreVertical, Shield, User, Power, Edit } from 'lucide-react';
-import GlassmorphicCard from '../common/GlassmorphicCard';
+import { adminAPI } from '../../services/api';
+import { useState, useEffect } from 'react';
 
 export default function UserManagement() {
     const [searchTerm, setSearchTerm] = useState('');
-    const [users, setUsers] = useState([
-        { id: 1, name: 'Ramesh Kumar', email: 'ramesh@email.com', role: 'Public', region: 'Hyderabad', status: 'Active' },
-        { id: 2, name: 'Rajesh Kumar', email: 'rajesh@gov.in', role: 'Officer', region: 'Hyderabad', status: 'Active' },
-        { id: 3, name: 'Sarah Wilson', email: 'sarah.w@admin.com', role: 'Admin', region: 'All', status: 'Active' },
-        { id: 4, name: 'Inactive User', email: 'user@test.com', role: 'Public', region: 'Warangal', status: 'Suspended' },
-    ]);
+    const [users, setUsers] = useState([]);
+    const [isLoading, setIsLoading] = useState(false);
+
+    useEffect(() => {
+        fetchUsers();
+    }, []);
+
+    const fetchUsers = async () => {
+        setIsLoading(true);
+        try {
+            const { data } = await adminAPI.users();
+            setUsers(data);
+
+        } catch (err) {
+            console.error("Error fetching users:", err);
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    const handleToggleStatus = async (userId, currentStatus) => {
+        const newStatus = currentStatus === 'Active' ? 'Suspended' : 'Active';
+        try {
+            await adminAPI.updateUser(userId, { status: newStatus });
+            fetchUsers();
+        } catch (err) {
+            alert("Error updating user status.");
+        }
+    };
+
 
     const filteredUsers = users.filter(user =>
         user.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -77,7 +100,11 @@ export default function UserManagement() {
                                         <button className="p-1.5 hover:bg-white/10 rounded-lg text-gray-400 hover:text-white" title="Edit">
                                             <Edit size={14} />
                                         </button>
-                                        <button className="p-1.5 hover:bg-white/10 rounded-lg text-gray-400 hover:text-red-400" title="Suspend">
+                                        <button 
+                                            onClick={() => handleToggleStatus(user.id, user.status)}
+                                            className={`p-1.5 hover:bg-white/10 rounded-lg ${user.status === 'Active' ? 'text-gray-400 hover:text-red-400' : 'text-red-400 hover:text-green-400'}`} 
+                                            title={user.status === 'Active' ? 'Suspend' : 'Activate'}
+                                        >
                                             <Power size={14} />
                                         </button>
                                     </div>

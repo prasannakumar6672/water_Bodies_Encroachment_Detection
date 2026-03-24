@@ -1,10 +1,54 @@
-import React, { useState } from 'react';
-import GlassmorphicCard from '../common/GlassmorphicCard';
-import AnimatedButton from '../common/AnimatedButton';
-import { Plus, Upload, Database, Satellite, MapPin, RefreshCw, CheckCircle } from 'lucide-react';
+import { adminAPI, lakesAPI, scanAPI } from '../../services/api';
+import { useEffect } from 'react';
 
 export default function LakeDatabaseManagement() {
     const [view, setView] = useState('list'); // 'list', 'add', 'import'
+    const [isSaving, setIsSaving] = useState(false);
+    const [lakeForm, setLakeForm] = useState({
+        name: '',
+        baseline_area_ha: '',
+        baseline_year: 2019,
+        district: 'Hyderabad',
+        mandal: '',
+        lat: '',
+        lon: ''
+    });
+
+    const handleSaveLake = async () => {
+        setIsSaving(true);
+        try {
+            await lakesAPI.add(lakeForm);
+            alert("Lake added successfully!");
+            setView('list');
+            setLakeForm({
+                name: '',
+                baseline_area_ha: '',
+                baseline_year: 2019,
+                district: 'Hyderabad',
+                mandal: '',
+                lat: '',
+                lon: ''
+            });
+        } catch (err) {
+            alert("Error saving lake. Please ensure all required fields are filled.");
+        } finally {
+            setIsSaving(false);
+        }
+    };
+
+    const handleTriggerScan = async () => {
+        setIsLoading(true);
+        try {
+            await scanAPI.run();
+            alert("Satellite data processing job started in background.");
+            setView('list');
+        } catch (err) {
+            alert("Error starting scan job.");
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
 
     return (
         <div className="h-full flex flex-col gap-6">
@@ -49,37 +93,63 @@ export default function LakeDatabaseManagement() {
 
                         <div className="grid grid-cols-2 gap-4">
                             <div className="space-y-1">
-                                <label className="text-xs text-gray-400">Lake Name</label>
-                                <input className="w-full bg-slate-900 border border-white/10 rounded-lg px-3 py-2 text-white focus:border-cyan-400 outline-none" placeholder="e.g. Durgam Cheruvu" />
+                                <label className="text-xs text-gray-400">Lake Name *</label>
+                                <input 
+                                    value={lakeForm.name}
+                                    onChange={(e) => setLakeForm({...lakeForm, name: e.target.value})}
+                                    className="w-full bg-slate-900 border border-white/10 rounded-lg px-3 py-2 text-white focus:border-cyan-400 outline-none" 
+                                    placeholder="e.g. Durgam Cheruvu" 
+                                />
                             </div>
                             <div className="space-y-1">
-                                <label className="text-xs text-gray-400">Original Area (Hectares)</label>
-                                <input type="number" className="w-full bg-slate-900 border border-white/10 rounded-lg px-3 py-2 text-white focus:border-cyan-400 outline-none" placeholder="10.5" />
+                                <label className="text-xs text-gray-400">Original Area (Hectares) *</label>
+                                <input 
+                                    type="number" 
+                                    value={lakeForm.baseline_area_ha}
+                                    onChange={(e) => setLakeForm({...lakeForm, baseline_area_ha: e.target.value})}
+                                    className="w-full bg-slate-900 border border-white/10 rounded-lg px-3 py-2 text-white focus:border-cyan-400 outline-none" 
+                                    placeholder="10.5" 
+                                />
                             </div>
                         </div>
 
                         <div className="grid grid-cols-2 gap-4">
                             <div className="space-y-1">
-                                <label className="text-xs text-gray-400">District</label>
-                                <select className="w-full bg-slate-900 border border-white/10 rounded-lg px-3 py-2 text-white focus:border-cyan-400 outline-none">
+                                <label className="text-xs text-gray-400">District *</label>
+                                <select 
+                                    value={lakeForm.district}
+                                    onChange={(e) => setLakeForm({...lakeForm, district: e.target.value})}
+                                    className="w-full bg-slate-900 border border-white/10 rounded-lg px-3 py-2 text-white focus:border-cyan-400 outline-none">
                                     <option>Hyderabad</option>
                                     <option>Rangareddy</option>
                                 </select>
                             </div>
                             <div className="space-y-1">
-                                <label className="text-xs text-gray-400">Mandal</label>
-                                <select className="w-full bg-slate-900 border border-white/10 rounded-lg px-3 py-2 text-white focus:border-cyan-400 outline-none">
-                                    <option>Serilingampally</option>
-                                    <option>Shaikpet</option>
-                                </select>
+                                <label className="text-xs text-gray-400">Mandal *</label>
+                                <input 
+                                    value={lakeForm.mandal}
+                                    onChange={(e) => setLakeForm({...lakeForm, mandal: e.target.value})}
+                                    className="w-full bg-slate-900 border border-white/10 rounded-lg px-3 py-2 text-white focus:border-cyan-400 outline-none" 
+                                    placeholder="Serilingampally" 
+                                />
                             </div>
                         </div>
 
                         <div className="space-y-1">
-                            <label className="text-xs text-gray-400">Geo-Coordinates (Center)</label>
+                            <label className="text-xs text-gray-400">Geo-Coordinates (Center) *</label>
                             <div className="flex gap-2">
-                                <input className="flex-1 bg-slate-900 border border-white/10 rounded-lg px-3 py-2 text-white focus:border-cyan-400 outline-none" placeholder="Latitude" />
-                                <input className="flex-1 bg-slate-900 border border-white/10 rounded-lg px-3 py-2 text-white focus:border-cyan-400 outline-none" placeholder="Longitude" />
+                                <input 
+                                    value={lakeForm.lat}
+                                    onChange={(e) => setLakeForm({...lakeForm, lat: e.target.value})}
+                                    className="flex-1 bg-slate-900 border border-white/10 rounded-lg px-3 py-2 text-white focus:border-cyan-400 outline-none" 
+                                    placeholder="Latitude" 
+                                />
+                                <input 
+                                    value={lakeForm.lon}
+                                    onChange={(e) => setLakeForm({...lakeForm, lon: e.target.value})}
+                                    className="flex-1 bg-slate-900 border border-white/10 rounded-lg px-3 py-2 text-white focus:border-cyan-400 outline-none" 
+                                    placeholder="Longitude" 
+                                />
                                 <button className="p-2 bg-slate-800 border border-white/10 rounded-lg text-cyan-400 hover:text-white" title="Pick on Map">
                                     <MapPin size={20} />
                                 </button>
@@ -88,7 +158,14 @@ export default function LakeDatabaseManagement() {
 
                         <div className="pt-4 flex gap-4">
                             <button onClick={() => setView('list')} className="px-6 py-2 rounded-lg text-gray-400 hover:text-white transition-colors">Cancel</button>
-                            <AnimatedButton variant="primary" className="px-8 py-2 font-bold">Save Lake</AnimatedButton>
+                            <AnimatedButton 
+                                variant="primary" 
+                                onClick={handleSaveLake}
+                                disabled={isSaving}
+                                className="px-8 py-2 font-bold"
+                            >
+                                {isSaving ? 'Saving...' : 'Save Lake'}
+                            </AnimatedButton>
                         </div>
                     </div>
                 )}
@@ -111,8 +188,14 @@ export default function LakeDatabaseManagement() {
                                 <label className="text-xs text-gray-400 block mb-1">Date Range</label>
                                 <input type="date" className="w-full bg-slate-800 rounded px-3 py-2 text-white outline-none border border-white/10" />
                             </div>
-                            <AnimatedButton variant="primary" className="w-full py-3 font-bold flex items-center justify-center gap-2">
-                                <RefreshCw size={18} /> Start Processing Job
+                            <AnimatedButton 
+                                variant="primary" 
+                                onClick={handleTriggerScan}
+                                disabled={isSaving}
+                                className="w-full py-3 font-bold flex items-center justify-center gap-2"
+                            >
+                                <RefreshCw size={18} className={isSaving ? "animate-spin" : ""} /> 
+                                {isSaving ? "Processing..." : "Start Processing Job"}
                             </AnimatedButton>
                         </div>
                     </div>

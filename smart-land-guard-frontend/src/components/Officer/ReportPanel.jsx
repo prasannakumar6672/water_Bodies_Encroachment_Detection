@@ -1,7 +1,6 @@
-import React, { useState } from 'react';
-import GlassmorphicCard from '../common/GlassmorphicCard';
-import AnimatedButton from '../common/AnimatedButton';
-import { FileText, Download, Filter, Calendar } from 'lucide-react';
+import { FileText, Download, Filter, Calendar, Loader2 } from 'lucide-react';
+import { adminAPI } from '../../services/api';
+
 
 export default function ReportPanel() {
     const [reportType, setReportType] = useState('Executive Summary');
@@ -9,13 +8,27 @@ export default function ReportPanel() {
     const [format, setFormat] = useState('PDF');
     const [isGenerating, setIsGenerating] = useState(false);
 
-    const handleGenerate = () => {
+    const handleGenerate = async () => {
         setIsGenerating(true);
-        // Simulate generation
-        setTimeout(() => {
+        try {
+            const { data } = await adminAPI.generateReport({
+                report_type: reportType,
+                scope: scope,
+                format: format
+            });
+            
+            // If the API returns a URL, trigger download
+            if (data.report_url) {
+                window.open(data.report_url, '_blank');
+            } else {
+                alert(`Report generated successfully! Reference: ${data.report_id}`);
+            }
+        } catch (err) {
+            alert("Error generating report. Please try again.");
+            console.error(err);
+        } finally {
             setIsGenerating(false);
-            alert(`Report Generated: ${reportType} (${scope}) in ${format} format.`);
-        }, 2000);
+        }
     };
 
     return (

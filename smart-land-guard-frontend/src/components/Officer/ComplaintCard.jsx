@@ -23,7 +23,9 @@ export default function ComplaintCard({ complaint, onRespond }) {
 
                 {/* Image Section */}
                 <div className="w-full md:w-48 h-32 md:h-auto flex-shrink-0 rounded-lg bg-gray-600/20 relative overflow-hidden">
-                    {complaint.image ? (
+                    {(complaint.photos && complaint.photos.length > 0) ? (
+                        <img src={complaint.photos[0]} alt="Evidence" className="w-full h-full object-cover" />
+                    ) : complaint.image ? (
                         <img src={complaint.image} alt="Evidence" className="w-full h-full object-cover" />
                     ) : (
                         <div className="flex items-center justify-center w-full h-full text-gray-500">
@@ -31,7 +33,7 @@ export default function ComplaintCard({ complaint, onRespond }) {
                         </div>
                     )}
                     <div className="absolute top-2 right-2 bg-black/60 px-2 py-1 rounded text-[10px] text-white">
-                        {complaint.photosCount} Photos
+                        {complaint.photos_count || (complaint.photos ? complaint.photos.length : 0)} Photos
                     </div>
                 </div>
 

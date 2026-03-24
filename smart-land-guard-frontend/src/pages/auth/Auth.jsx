@@ -5,39 +5,38 @@ import { useNavigate } from 'react-router-dom';
 import GlassmorphicCard from '../../components/common/GlassmorphicCard';
 import AnimatedButton from '../../components/common/AnimatedButton';
 import { User, Shield, Building2, Lock, Mail, AlertCircle, ArrowRight } from 'lucide-react';
+import { authAPI } from '../../services/api';
 
 export default function Auth() {
     const { login } = useAuth();
     const navigate = useNavigate();
 
-    // State
-    const [selectedRole, setSelectedRole] = useState('public'); // 'public' | 'officer' | 'admin'
-    const [authMode, setAuthMode] = useState('login'); // 'login' | 'register'
+    const [selectedRole, setSelectedRole] = useState('public');
+    const [authMode, setAuthMode] = useState('login');
     const [isLoading, setIsLoading] = useState(false);
+    const [errorMsg, setErrorMsg] = useState('');
 
-    // Form States
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
 
-    const handleLogin = (e) => {
+    const handleLogin = async (e) => {
         e.preventDefault();
         setIsLoading(true);
-
-        // Simulate API call
-        setTimeout(() => {
-            const userData = {
-                name: email.split('@')[0],
-                email: email,
-                role: selectedRole
-            };
-            login(userData);
+        setErrorMsg('');
+        try {
+            const { data } = await authAPI.login(email, password, selectedRole);
+            // Store user + JWT token
+            login(data.user, data.access_token);
+            // Role-based redirect
+            if (data.user.role === 'public') navigate('/dashboard');
+            else if (data.user.role === 'officer') navigate('/officer-dashboard');
+            else if (data.user.role === 'admin') navigate('/admin-dashboard');
+        } catch (err) {
+            const msg = err.response?.data?.detail || 'Login failed. Check credentials and try again.';
+            setErrorMsg(msg);
+        } finally {
             setIsLoading(false);
-
-            // Role-based Redirection
-            if (selectedRole === 'public') navigate('/dashboard');
-            else if (selectedRole === 'officer') navigate('/officer-dashboard');
-            else if (selectedRole === 'admin') navigate('/admin-dashboard');
-        }, 1500);
+        }
     };
 
     const roles = [
